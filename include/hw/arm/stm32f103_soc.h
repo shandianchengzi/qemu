@@ -29,6 +29,7 @@
 #include "hw/char/stm32f2xx_usart.h"
 #include "hw/ssi/stm32f2xx_spi.h"
 #include "hw/adc/stm32f1xx_adc.h"
+#include "hw/timer/stm32f1xx_timer.h"
 #include "hw/core/or-irq.h"
 #include "hw/arm/armv7m.h"
 #include "qom/object.h"
@@ -57,6 +58,7 @@ struct STM32F103State {
     STM32F2XXSPIState spi[STM32F103_NUM_SPIS];
     OrIRQState adc_irqs;
     STM32F1XXADCState adc[STM32F103_NUM_ADCS];
+    STM32F1XXTimerState timer;
 
     MemoryRegion sram;
     MemoryRegion flash;

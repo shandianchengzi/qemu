@@ -408,7 +408,7 @@ config STM32F103_SOC
     select OR_IRQ
     select STM32F1XX_RCC
     select STM32F2XX_USART
-    select STM32F2XX_SPI
+    select STM32F1XX_SPI
     select STM32F1XX_ADC
 
 config B_L475E_IOT01A

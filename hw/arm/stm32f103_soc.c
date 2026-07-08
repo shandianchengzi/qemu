@@ -68,7 +68,7 @@ static void stm32f103_soc_initfn(Object *obj)
 
     for (i = 0; i < STM32F103_NUM_SPIS; i++) {
         object_initialize_child(obj, "spi[*]", &s->spi[i],
-                                TYPE_STM32F2XX_SPI);
+                                TYPE_STM32F1XX_SPI);
     }
 
     for (i = 0; i < STM32F103_NUM_ADCS; i++) {
@@ -217,7 +217,6 @@ static void stm32f103_soc_realize(DeviceState *dev_soc, Error **errp)
     create_unimplemented_device("RTC",         0x40002800, 0x400);
     create_unimplemented_device("WWDG",        0x40002C00, 0x400);
     create_unimplemented_device("IWDG",        0x40003000, 0x400);
-    create_unimplemented_device("SPI2/I2S",    0x40003800, 0x400);
     create_unimplemented_device("I2C1",        0x40005400, 0x400);
     create_unimplemented_device("I2C2",        0x40005800, 0x400);
     create_unimplemented_device("USB device",  0x40005C00, 0x400);
@@ -248,8 +247,12 @@ static void stm32f103_soc_realize(DeviceState *dev_soc, Error **errp)
     /* AHB peripherals */
     create_unimplemented_device("DMA1",        0x40020000, 0x400);
     create_unimplemented_device("DMA2",        0x40020400, 0x400);
-    /* Flash ACR (0x40022000): minimal stub so HAL_RCC_ClockConfig can set LATENCY */
-    memory_region_init_ram(&s->flash_acr, NULL, "stm32f103.flash_acr", 0x400, &err);
+    /*
+     * Flash ACR (0x40022000): minimal stub so HAL_RCC_ClockConfig
+     * can set LATENCY.
+     */
+    memory_region_init_ram(&s->flash_acr, NULL, "stm32f103.flash_acr",
+                           0x400, &err);
     memory_region_add_subregion(system_memory, 0x40022000, &s->flash_acr);
     create_unimplemented_device("CRC",         0x40023000, 0x400);
     create_unimplemented_device("Ethernet",    0x40028000, 0x2000);

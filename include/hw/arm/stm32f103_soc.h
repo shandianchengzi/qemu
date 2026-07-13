@@ -26,7 +26,7 @@
 #define HW_ARM_STM32F103_SOC_H
 
 #include "hw/misc/stm32f1xx_rcc.h"
-#include "hw/char/stm32f2xx_usart.h"
+#include "hw/char/stm32f1xx_usart.h"
 #include "hw/ssi/stm32f2xx_spi.h"
 #include "hw/adc/stm32f1xx_adc.h"
 #include "hw/core/or-irq.h"
@@ -53,7 +53,7 @@ struct STM32F103State {
     ARMv7MState armv7m;
 
     STM32F1XXRccState rcc;
-    STM32F2XXUsartState usart[STM32F103_NUM_USARTS];
+    STM32F1XXUsartState usart[STM32F103_NUM_USARTS];
     STM32F2XXSPIState spi[STM32F103_NUM_SPIS];
     OrIRQState adc_irqs;
     STM32F1XXADCState adc[STM32F103_NUM_ADCS];

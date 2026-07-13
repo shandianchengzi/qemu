@@ -63,7 +63,7 @@ static void stm32f103_soc_initfn(Object *obj)
 
     for (i = 0; i < STM32F103_NUM_USARTS; i++) {
         object_initialize_child(obj, "usart[*]", &s->usart[i],
-                                TYPE_STM32F2XX_USART);
+                                TYPE_STM32F1XX_USART);
     }
 
     for (i = 0; i < STM32F103_NUM_SPIS; i++) {

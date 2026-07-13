@@ -18,7 +18,8 @@ static void stm32f1xx_usart_update_irq(STM32F1XXUsartState *s)
 {
     if (((s->sr & USART_SR_TXE) && (s->cr1 & USART_CR1_TXEIE)) ||
         ((s->sr & USART_SR_TC) && (s->cr1 & USART_CR1_TCIE)) ||
-        ((s->sr & USART_SR_RXNE) && (s->cr1 & USART_CR1_RXNEIE))) {
+        ((s->sr & USART_SR_RXNE) && (s->cr1 & USART_CR1_RXNEIE)) ||
+        ((s->sr & USART_SR_ORE) && (s->cr1 & USART_CR1_RXNEIE))) {
         qemu_set_irq(s->irq, 1);
     } else {
         qemu_set_irq(s->irq, 0);
@@ -27,22 +28,28 @@ static void stm32f1xx_usart_update_irq(STM32F1XXUsartState *s)
 
 static int stm32f1xx_usart_can_receive(void *opaque)
 {
-    STM32F1XXUsartState *s = opaque;
-
-    return !(s->sr & USART_SR_RXNE);
+    return 1;
 }
 
 static void stm32f1xx_usart_receive(void *opaque, const uint8_t *buf, int size)
 {
     STM32F1XXUsartState *s = opaque;
+    int i;
 
-    if ((s->cr1 & (USART_CR1_UE | USART_CR1_RE)) !=
-        (USART_CR1_UE | USART_CR1_RE)) {
-        return;
+    for (i = 0; i < size; i++) {
+        if ((s->cr1 & (USART_CR1_UE | USART_CR1_RE)) !=
+            (USART_CR1_UE | USART_CR1_RE)) {
+            continue;
+        }
+
+        if (s->sr & USART_SR_RXNE) {
+            s->sr |= USART_SR_ORE;
+            continue;
+        }
+
+        s->dr = buf[i];
+        s->sr |= USART_SR_RXNE;
     }
-
-    s->dr = *buf;
-    s->sr |= USART_SR_RXNE;
     stm32f1xx_usart_update_irq(s);
 }
 
@@ -57,6 +64,7 @@ static void stm32f1xx_usart_reset(DeviceState *dev)
     s->cr2 = 0x00000000;
     s->cr3 = 0x00000000;
     s->gtpr = 0x00000000;
+    s->sr_read = false;
 
     stm32f1xx_usart_update_irq(s);
 }
@@ -68,8 +76,13 @@ static uint64_t stm32f1xx_usart_read(void *opaque, hwaddr addr,
 
     switch (addr) {
     case USART_SR:
+        s->sr_read = true;
         return s->sr;
     case USART_DR:
+        if (s->sr_read) {
+            s->sr &= ~USART_SR_ORE;
+            s->sr_read = false;
+        }
         s->sr &= ~USART_SR_RXNE;
         stm32f1xx_usart_update_irq(s);
         qemu_chr_fe_accept_input(&s->chr);
@@ -99,18 +112,29 @@ static void stm32f1xx_usart_write(void *opaque, hwaddr addr,
 
     switch (addr) {
     case USART_SR:
-        s->sr = value;
+        if (!(value & USART_SR_TC)) {
+            s->sr &= ~USART_SR_TC;
+        }
+        if (!(value & USART_SR_RXNE)) {
+            s->sr &= ~USART_SR_RXNE;
+        }
         stm32f1xx_usart_update_irq(s);
         return;
     case USART_DR:
         s->dr = value;
+        s->sr &= ~USART_SR_TXE;
+        if (s->sr_read) {
+            s->sr &= ~USART_SR_TC;
+            s->sr_read = false;
+        }
         if ((s->cr1 & (USART_CR1_UE | USART_CR1_TE)) ==
             (USART_CR1_UE | USART_CR1_TE)) {
             uint8_t ch = value;
 
             qemu_chr_fe_write_all(&s->chr, &ch, 1);
+            s->sr |= USART_SR_TC;
         }
-        s->sr |= USART_SR_TXE | USART_SR_TC;
+        s->sr |= USART_SR_TXE;
         stm32f1xx_usart_update_irq(s);
         return;
     case USART_BRR:

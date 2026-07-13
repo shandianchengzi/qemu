@@ -26,6 +26,7 @@
 #define USART_SR_TXE  (1U << 7)
 #define USART_SR_TC   (1U << 6)
 #define USART_SR_RXNE (1U << 5)
+#define USART_SR_ORE  (1U << 3)
 
 #define USART_SR_RESET 0x000000c0
 
@@ -53,6 +54,8 @@ struct STM32F1XXUsartState {
     uint32_t cr2;
     uint32_t cr3;
     uint32_t gtpr;
+
+    bool sr_read;
 };
 
 #endif /* HW_STM32F1XX_USART_H */

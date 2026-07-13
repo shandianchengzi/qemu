@@ -21,6 +21,7 @@
 #define USART_SR_TXE  (1U << 7)
 #define USART_SR_TC   (1U << 6)
 #define USART_SR_RXNE (1U << 5)
+#define USART_SR_ORE  (1U << 3)
 
 #define USART_CR1_UE     (1U << 13)
 #define USART_CR1_TXEIE  (1U << 7)
@@ -60,6 +61,21 @@ static bool usart_wait_for_flag(QTestState *qts, uint32_t reg,
     }
 
     return false;
+}
+
+static bool usart_wait_for_no_flag(QTestState *qts, uint32_t reg,
+                                   uint32_t flag)
+{
+    int64_t end_time = g_get_monotonic_time() + 100 * G_TIME_SPAN_MILLISECOND;
+
+    while (g_get_monotonic_time() < end_time) {
+        if (qtest_readl(qts, reg) & flag) {
+            return false;
+        }
+        g_usleep(1000);
+    }
+
+    return true;
 }
 
 static void usart_init(QTestState *qts, uint32_t cr1)
@@ -176,6 +192,183 @@ static void test_rx_irq(void)
     qtest_quit(qts);
 }
 
+static void test_tc_clear_sequence(void)
+{
+    uint32_t sr;
+    QTestState *qts = qtest_init("-M stm32f103");
+
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_true(sr & USART_SR_TC);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_DR, 'D');
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_TC);
+    g_assert_true(sr & USART_SR_TXE);
+
+    qtest_quit(qts);
+}
+
+static void test_sr_clear(void)
+{
+    int sock_fd;
+    uint32_t sr;
+    QTestState *qts = qtest_init_with_serial("-M stm32f103", &sock_fd);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_SR,
+                 USART_SR_TXE | USART_SR_RXNE | USART_SR_ORE);
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_TC);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_SR,
+                 USART_SR_TXE | USART_SR_TC | USART_SR_RXNE |
+                 USART_SR_ORE);
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_TC);
+    g_assert_false(sr & USART_SR_RXNE);
+    g_assert_false(sr & USART_SR_ORE);
+
+    usart_init(qts, USART_CR1_UE | USART_CR1_RE);
+    g_assert_cmpint(send(sock_fd, "E", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_RXNE));
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_SR,
+                 USART_SR_TXE | USART_SR_TC | USART_SR_ORE);
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_RXNE);
+
+    g_assert_cmpint(send(sock_fd, "F", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_RXNE));
+    g_assert_cmpint(send(sock_fd, "G", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_ORE));
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_SR,
+                 USART_SR_TXE | USART_SR_TC | USART_SR_RXNE);
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_true(sr & USART_SR_ORE);
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_DR), ==, 'F');
+
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_RXNE);
+    g_assert_false(sr & USART_SR_ORE);
+
+    close(sock_fd);
+    qtest_quit(qts);
+}
+
+static void test_overrun(void)
+{
+    int sock_fd;
+    uint32_t sr;
+    QTestState *qts = qtest_init_with_serial("-M stm32f103", &sock_fd);
+
+    usart_init(qts, USART_CR1_UE | USART_CR1_RE);
+
+    g_assert_cmpint(send(sock_fd, "A", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_RXNE));
+
+    g_assert_cmpint(send(sock_fd, "B", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_ORE));
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_DR), ==, 'A');
+
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_RXNE);
+    g_assert_false(sr & USART_SR_ORE);
+
+    close(sock_fd);
+    qtest_quit(qts);
+}
+
+static void test_overrun_irq(void)
+{
+    int sock_fd;
+    QTestState *qts = qtest_init_with_serial("-M stm32f103", &sock_fd);
+
+    usart_init(qts, USART_CR1_UE | USART_CR1_RE | USART_CR1_RXNEIE);
+
+    g_assert_cmpint(send(sock_fd, "A", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_RXNE));
+    clear_nvic_pending(qts, USART1_IRQ);
+
+    g_assert_cmpint(send(sock_fd, "B", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_ORE));
+    g_assert_true(check_nvic_pending(qts, USART1_IRQ));
+
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_DR), ==, 'A');
+    clear_nvic_pending(qts, USART1_IRQ);
+    g_assert_false(check_nvic_pending(qts, USART1_IRQ));
+
+    close(sock_fd);
+    qtest_quit(qts);
+}
+
+static void test_tx_irq(void)
+{
+    QTestState *qts = qtest_init("-M stm32f103");
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_CR1, USART_CR1_TXEIE);
+    g_assert_true(check_nvic_pending(qts, USART1_IRQ));
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_CR1, 0);
+    clear_nvic_pending(qts, USART1_IRQ);
+    g_assert_false(check_nvic_pending(qts, USART1_IRQ));
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_CR1, USART_CR1_TCIE);
+    g_assert_true(check_nvic_pending(qts, USART1_IRQ));
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_SR, USART_SR_TXE);
+    clear_nvic_pending(qts, USART1_IRQ);
+    g_assert_false(check_nvic_pending(qts, USART1_IRQ));
+
+    qtest_quit(qts);
+}
+
+static void check_rx_gate(uint32_t cr1, char ch)
+{
+    int sock_fd;
+    QTestState *qts = qtest_init_with_serial("-M stm32f103", &sock_fd);
+
+    usart_init(qts, cr1);
+
+    g_assert_cmpint(send(sock_fd, &ch, 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_no_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                         USART_SR_RXNE));
+    g_assert_false(check_nvic_pending(qts, USART1_IRQ));
+
+    close(sock_fd);
+    qtest_quit(qts);
+}
+
+static void test_rx_gate(void)
+{
+    int sock_fd;
+    uint32_t sr;
+    QTestState *qts;
+
+    check_rx_gate(USART_CR1_RE | USART_CR1_RXNEIE, 'A');
+    check_rx_gate(USART_CR1_UE | USART_CR1_RXNEIE, 'B');
+
+    qts = qtest_init_with_serial("-M stm32f103", &sock_fd);
+    usart_init(qts, USART_CR1_UE | USART_CR1_RE);
+
+    g_assert_cmpint(send(sock_fd, "C", 1, 0), ==, 1);
+    g_assert_true(usart_wait_for_flag(qts, USART1_BASE_ADDR + USART_SR,
+                                      USART_SR_RXNE));
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_DR), ==, 'C');
+
+    sr = qtest_readl(qts, USART1_BASE_ADDR + USART_SR);
+    g_assert_false(sr & USART_SR_RXNE);
+
+    close(sock_fd);
+    qtest_quit(qts);
+}
+
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
@@ -186,6 +379,13 @@ int main(int argc, char **argv)
     qtest_add_func("stm32f103/usart/tx", test_tx);
     qtest_add_func("stm32f103/usart/rx", test_rx);
     qtest_add_func("stm32f103/usart/rx_irq", test_rx_irq);
+    qtest_add_func("stm32f103/usart/tc_clear_sequence",
+                   test_tc_clear_sequence);
+    qtest_add_func("stm32f103/usart/sr_clear", test_sr_clear);
+    qtest_add_func("stm32f103/usart/overrun", test_overrun);
+    qtest_add_func("stm32f103/usart/overrun_irq", test_overrun_irq);
+    qtest_add_func("stm32f103/usart/tx_irq", test_tx_irq);
+    qtest_add_func("stm32f103/usart/rx_gate", test_rx_gate);
 
     return g_test_run();
 }

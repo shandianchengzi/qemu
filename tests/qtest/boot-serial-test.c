@@ -194,6 +194,8 @@ static const testdef_t tests[] = {
     { "arm", "microbit", "", "T", sizeof(kernel_nrf51), kernel_nrf51 },
     { "arm", "stm32vldiscovery", "", "T",
       sizeof(kernel_stm32vldiscovery), kernel_stm32vldiscovery },
+    { "arm", "stm32f103", "", "T",
+      sizeof(kernel_stm32vldiscovery), kernel_stm32vldiscovery },
 
     { NULL }
 };

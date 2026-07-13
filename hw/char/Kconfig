@@ -51,6 +51,10 @@ config VIRTIO_SERIAL
 config MAX78000_UART
     bool
 
+config STM32F1XX_USART
+    bool
+    depends on STM32F103_SOC
+
 config STM32F2XX_USART
     bool
 

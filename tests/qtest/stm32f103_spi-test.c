@@ -48,6 +48,16 @@ static void spi_writel(QTestState *qts, uint32_t reg, uint32_t value)
     qtest_writel(qts, STM32F103_SPI1_BASE + reg, value);
 }
 
+static uint8_t spi_readb(QTestState *qts, uint32_t reg)
+{
+    return qtest_readb(qts, STM32F103_SPI1_BASE + reg);
+}
+
+static void spi_writeb(QTestState *qts, uint32_t reg, uint8_t value)
+{
+    qtest_writeb(qts, STM32F103_SPI1_BASE + reg, value);
+}
+
 static QTestState *stm32f103_qtest_init(void)
 {
     return qtest_init("-machine stm32f103 -monitor none -serial none");
@@ -101,6 +111,20 @@ static void test_enabled_transfer_sets_rxne(void)
     qtest_quit(qts);
 }
 
+static void test_byte_transfer_sets_rxne(void)
+{
+    QTestState *qts = stm32f103_qtest_init();
+
+    spi_writel(qts, SPI_CR1, SPI_CR1_MSTR | SPI_CR1_SPE);
+    spi_writeb(qts, SPI_DR, 0x5a);
+    g_assert_cmphex(spi_readl(qts, SPI_SR) & (SPI_SR_TXE | SPI_SR_RXNE), ==,
+                    SPI_SR_TXE | SPI_SR_RXNE);
+    g_assert_cmphex(spi_readb(qts, SPI_DR), ==, 0);
+    g_assert_cmphex(spi_readl(qts, SPI_SR) & SPI_SR_RXNE, ==, 0);
+
+    qtest_quit(qts);
+}
+
 static void test_overrun_is_reported_and_cleared_by_dr_read(void)
 {
     QTestState *qts = stm32f103_qtest_init();
@@ -144,6 +168,8 @@ int main(int argc, char **argv)
                    test_disabled_write_does_not_receive);
     qtest_add_func("/stm32f103/spi/enabled-transfer",
                    test_enabled_transfer_sets_rxne);
+    qtest_add_func("/stm32f103/spi/byte-transfer",
+                   test_byte_transfer_sets_rxne);
     qtest_add_func("/stm32f103/spi/overrun",
                    test_overrun_is_reported_and_cleared_by_dr_read);
     qtest_add_func("/stm32f103/spi/write-masks-and-16bit-frame",

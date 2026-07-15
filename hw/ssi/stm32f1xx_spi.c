@@ -202,7 +202,7 @@ static const MemoryRegionOps stm32f1xx_spi_ops = {
     .read = stm32f1xx_spi_read,
     .write = stm32f1xx_spi_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
-    .impl.min_access_size = 2,
+    .impl.min_access_size = 1,
     .impl.max_access_size = 4,
 };
 

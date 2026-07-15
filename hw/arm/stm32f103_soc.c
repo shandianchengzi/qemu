@@ -51,6 +51,9 @@ static const int usart_irq[] = { 37, 38, 39, 52, 53 };
 static const int spi_irq[]   = { 35, 36, 51 };
 #define ADC_IRQ 18
 
+#define TIM2_ADDR          0x40000000
+#define TIM2_IRQ           28
+#define TIM2_CLOCK_FREQ_HZ 72000000
 
 static void stm32f103_soc_initfn(Object *obj)
 {
@@ -75,6 +78,8 @@ static void stm32f103_soc_initfn(Object *obj)
         object_initialize_child(obj, "adc[*]", &s->adc[i],
                                 TYPE_STM32F1XX_ADC);
     }
+
+    object_initialize_child(obj, "tim2", &s->timer, TYPE_STM32F1XX_TIMER);
 
     s->sysclk = qdev_init_clock_in(DEVICE(s), "sysclk", NULL, NULL, 0);
     s->refclk = qdev_init_clock_in(DEVICE(s), "refclk", NULL, NULL, 0);
@@ -173,6 +178,16 @@ static void stm32f103_soc_realize(DeviceState *dev_soc, Error **errp)
         sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, spi_irq[i]));
     }
 
+    /* TIM2 general-purpose timer */
+    dev = DEVICE(&s->timer);
+    qdev_prop_set_uint64(dev, "clock-frequency", TIM2_CLOCK_FREQ_HZ);
+    if (!sysbus_realize(SYS_BUS_DEVICE(dev), errp)) {
+        return;
+    }
+    busdev = SYS_BUS_DEVICE(dev);
+    sysbus_mmio_map(busdev, 0, TIM2_ADDR);
+    sysbus_connect_irq(busdev, 0, qdev_get_gpio_in(armv7m, TIM2_IRQ));
+
     /* ADC device, the IRQs are ORed together */
     if (!object_initialize_child_with_props(OBJECT(s), "adc-orirq",
                                             &s->adc_irqs, sizeof(s->adc_irqs),
@@ -205,7 +220,6 @@ static void stm32f103_soc_realize(DeviceState *dev_soc, Error **errp)
      */
 
     /* APB1 peripherals */
-    create_unimplemented_device("timer[2]",    0x40000000, 0x400);
     create_unimplemented_device("timer[3]",    0x40000400, 0x400);
     create_unimplemented_device("timer[4]",    0x40000800, 0x400);
     create_unimplemented_device("timer[5]",    0x40000C00, 0x400);

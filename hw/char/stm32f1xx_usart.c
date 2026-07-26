@@ -14,6 +14,13 @@
 #include "hw/core/qdev-properties.h"
 #include "hw/core/qdev-properties-system.h"
 
+#define STM32F1XX_USART_DR_MASK   0x000001ff
+#define STM32F1XX_USART_BRR_MASK  0x0000ffff
+#define STM32F1XX_USART_CR1_MASK  0x00003fff
+#define STM32F1XX_USART_CR2_MASK  0x00007f6f
+#define STM32F1XX_USART_CR3_MASK  0x000007ff
+#define STM32F1XX_USART_GTPR_MASK 0x0000ffff
+
 static void stm32f1xx_usart_update_irq(STM32F1XXUsartState *s)
 {
     if (((s->sr & USART_SR_TXE) && (s->cr1 & USART_CR1_TXEIE)) ||
@@ -121,7 +128,7 @@ static void stm32f1xx_usart_write(void *opaque, hwaddr addr,
         stm32f1xx_usart_update_irq(s);
         return;
     case USART_DR:
-        s->dr = value;
+        s->dr = value & STM32F1XX_USART_DR_MASK;
         s->sr &= ~USART_SR_TXE;
         if (s->sr_read) {
             s->sr &= ~USART_SR_TC;
@@ -138,20 +145,20 @@ static void stm32f1xx_usart_write(void *opaque, hwaddr addr,
         stm32f1xx_usart_update_irq(s);
         return;
     case USART_BRR:
-        s->brr = value;
+        s->brr = value & STM32F1XX_USART_BRR_MASK;
         return;
     case USART_CR1:
-        s->cr1 = value;
+        s->cr1 = value & STM32F1XX_USART_CR1_MASK;
         stm32f1xx_usart_update_irq(s);
         return;
     case USART_CR2:
-        s->cr2 = value;
+        s->cr2 = value & STM32F1XX_USART_CR2_MASK;
         return;
     case USART_CR3:
-        s->cr3 = value;
+        s->cr3 = value & STM32F1XX_USART_CR3_MASK;
         return;
     case USART_GTPR:
-        s->gtpr = value;
+        s->gtpr = value & STM32F1XX_USART_GTPR_MASK;
         return;
     default:
         qemu_log_mask(LOG_GUEST_ERROR,
@@ -164,12 +171,12 @@ static const MemoryRegionOps stm32f1xx_usart_ops = {
     .write = stm32f1xx_usart_write,
     .endianness = DEVICE_LITTLE_ENDIAN,
     .valid = {
-        .min_access_size = 4,
+        .min_access_size = 2,
         .max_access_size = 4,
         .unaligned = false,
     },
     .impl = {
-        .min_access_size = 4,
+        .min_access_size = 2,
         .max_access_size = 4,
         .unaligned = false,
     },

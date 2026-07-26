@@ -30,6 +30,13 @@
 #define USART_CR1_TE     (1U << 3)
 #define USART_CR1_RE     (1U << 2)
 
+#define USART_DR_MASK   0x000001ff
+#define USART_BRR_MASK  0x0000ffff
+#define USART_CR1_MASK  0x00003fff
+#define USART_CR2_MASK  0x00007f6f
+#define USART_CR3_MASK  0x000007ff
+#define USART_GTPR_MASK 0x0000ffff
+
 #define NVIC_ISPR1 0xe000e204
 #define NVIC_ICPR1 0xe000e284
 #define USART1_IRQ 37
@@ -110,25 +117,38 @@ static void test_registers(void)
 {
     QTestState *qts = qtest_init("-M stm32f103");
 
-    qtest_writel(qts, USART1_BASE_ADDR + USART_BRR, 0x1234);
+    qtest_writel(qts, USART1_BASE_ADDR + USART_DR, UINT32_MAX);
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_DR), ==,
+                    USART_DR_MASK);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_BRR, UINT32_MAX);
     g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_BRR), ==,
+                    USART_BRR_MASK);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_CR1, UINT32_MAX);
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_CR1), ==,
+                    USART_CR1_MASK);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_CR2, UINT32_MAX);
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_CR2), ==,
+                    USART_CR2_MASK);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_CR3, UINT32_MAX);
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_CR3), ==,
+                    USART_CR3_MASK);
+
+    qtest_writel(qts, USART1_BASE_ADDR + USART_GTPR, UINT32_MAX);
+    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_GTPR), ==,
+                    USART_GTPR_MASK);
+
+    qtest_writew(qts, USART1_BASE_ADDR + USART_BRR, 0x1234);
+    g_assert_cmphex(qtest_readw(qts, USART1_BASE_ADDR + USART_BRR), ==,
                     0x1234);
 
-    qtest_writel(qts, USART1_BASE_ADDR + USART_CR1, USART_CR1_UE);
-    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_CR1), ==,
-                    USART_CR1_UE);
-
-    qtest_writel(qts, USART1_BASE_ADDR + USART_CR2, 0x3456);
-    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_CR2), ==,
-                    0x3456);
-
-    qtest_writel(qts, USART1_BASE_ADDR + USART_CR3, 0x5678);
-    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_CR3), ==,
-                    0x5678);
-
-    qtest_writel(qts, USART1_BASE_ADDR + USART_GTPR, 0x9abc);
-    g_assert_cmphex(qtest_readl(qts, USART1_BASE_ADDR + USART_GTPR), ==,
-                    0x9abc);
+    qtest_writew(qts, USART1_BASE_ADDR + USART_CR1,
+                 USART_CR1_UE | USART_CR1_TE);
+    g_assert_cmphex(qtest_readw(qts, USART1_BASE_ADDR + USART_CR1), ==,
+                    USART_CR1_UE | USART_CR1_TE);
 
     qtest_quit(qts);
 }
